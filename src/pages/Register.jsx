@@ -3,38 +3,96 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '../context/AuthContext';
 import { Wallet, Mail, Lock, User, AlertCircle } from 'lucide-react';
+import axiosInstance from '../utils/axios';
+import axios from 'axios';
 
 const Register = () => {
   const navigate = useNavigate();
   const { register: registerUser } = useAuth();
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    confirmPassword: '',
+  });
 
   const {
     register,
     handleSubmit,
     watch,
+    reset,
     formState: { errors },
   } = useForm();
 
   const password = watch('password');
-
-  const onSubmit = async (data) => {
-    setLoading(true);
-    setError('');
-    
-    try {
-      await registerUser({
-        name: data.name,
-        email: data.email,
-        password: data.password,
-      });
-      navigate('/login', { state: { message: 'Registration successful! Please login.' } });
-    } catch (err) {
-      setError(err.response?.data?.message || 'Registration failed. Please try again.');
-    } finally {
-      setLoading(false);
+  const checkpassword = (password, confirmPassword) => {
+    if(password !== confirmPassword){
+      setError('Passwords do not match');
+      return false;
     }
+    return true;
+  }
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData({ ...formData, [name]: value });
+  };
+  const onSubmit = async (data) => {
+     setLoading(true);
+     if(!checkpassword(data.password, data.confirmPassword)){
+       setLoading(false);
+       return;
+     }
+     setError('');
+     
+     try {
+       // Prepare the data object for the API
+       const signupData = {
+         name: data.name,
+         email: data.email,
+         password: data.password
+       };
+       
+       console.log('Sending signup data:', signupData);
+       
+       // Use axios with proper error handling
+       const response = await axiosInstance.post('/auth/signup', signupData);
+       console.log('Signup response:', response);
+       
+       if(response.status === 200 || response.status === 201){
+         setSuccess(true);
+         setError('');
+         // Reset form using react-hook-form
+         reset();
+         setFormData({
+           name: '',
+           email: '',
+           password: '',
+           confirmPassword: '',
+         });
+         // Navigate to login page after successful registration
+         setTimeout(() => {
+           navigate('/login');
+         }, 2000);
+       }
+     } catch (err) {
+       console.error('Signup error:', err);
+       
+       // Handle different types of errors
+       if (err.code === 'ERR_NETWORK') {
+         setError('Network error: Unable to connect to server. Please check if the server is running.');
+       } else if (err.response?.status === 403) {
+         setError('Access denied: CORS policy is blocking the request. Please configure CORS on your backend server.');
+       } else if (err.response?.data?.message) {
+         setError(err.response.data.message);
+       } else {
+         setError(err.message || 'Registration failed. Please try again.');
+       }
+     } finally {
+       setLoading(false);
+     }
   };
 
   return (
@@ -58,6 +116,15 @@ const Register = () => {
             </div>
           )}
 
+          {success && (
+            <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2 text-green-800">
+              <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+              </svg>
+              <span className="text-sm">Account created successfully! Redirecting to login...</span>
+            </div>
+          )}
+
           <form className="space-y-6" onSubmit={handleSubmit(onSubmit)}>
             <div>
               <label htmlFor="name" className="block text-sm font-medium text-gray-700 mb-2">
@@ -68,6 +135,7 @@ const Register = () => {
                 <input
                   id="name"
                   type="text"
+                  value={formData.name}
                   className={`input-field pl-10 ${errors.name ? 'border-red-500' : ''}`}
                   placeholder="Enter your full name"
                   {...register('name', {
@@ -77,6 +145,7 @@ const Register = () => {
                       message: 'Name must be at least 2 characters',
                     },
                   })}
+                  onChange={handleInputChange}
                 />
               </div>
               {errors.name && (
@@ -93,6 +162,7 @@ const Register = () => {
                 <input
                   id="email"
                   type="email"
+                  value={formData.email}
                   className={`input-field pl-10 ${errors.email ? 'border-red-500' : ''}`}
                   placeholder="Enter your email"
                   {...register('email', {
@@ -102,6 +172,7 @@ const Register = () => {
                       message: 'Invalid email address',
                     },
                   })}
+                  onChange={handleInputChange}
                 />
               </div>
               {errors.email && (
@@ -118,6 +189,7 @@ const Register = () => {
                 <input
                   id="password"
                   type="password"
+                  value={formData.password}
                   className={`input-field pl-10 ${errors.password ? 'border-red-500' : ''}`}
                   placeholder="Create a password"
                   {...register('password', {
@@ -127,6 +199,7 @@ const Register = () => {
                       message: 'Password must be at least 6 characters',
                     },
                   })}
+                  onChange={handleInputChange}
                 />
               </div>
               {errors.password && (
@@ -150,6 +223,7 @@ const Register = () => {
                     validate: (value) =>
                       value === password || 'Passwords do not match',
                   })}
+                  onChange={handleInputChange}
                 />
               </div>
               {errors.confirmPassword && (
